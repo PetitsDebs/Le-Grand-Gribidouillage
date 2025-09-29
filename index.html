@@ -206,50 +206,30 @@ window.addEventListener('unhandledrejection', (e)=>console.error('[unhandledreje
 
 /* === Firebase config — AJUSTE databaseURL + storageBucket si besoin === */
 const firebaseConfig = {
+
   apiKey: "AIzaSyCxWxz9Nf97tBwIilvCgqQ7yVk3gMPC4Cs",
+
   authDomain: "le-grand-gribidouillage.firebaseapp.com",
+
+  databaseURL: "https://le-grand-gribidouillage-default-rtdb.europe-west1.firebasedatabase.app",
+
   projectId: "le-grand-gribidouillage",
-  storageBucket: "le-grand-gribidouillage.appspot.com",
+
+  storageBucket: "le-grand-gribidouillage.firebasestorage.app",
+
   messagingSenderId: "999048366927",
-  appId: "1:999048366927:web:1120aca9e541873a93d33a",
-  databaseURL: "firebase-adminsdk-fbsvc@le-grand-gribidouillage.iam.gserviceaccount.com" /* ← METS TON URL ICI */
+
+  appId: "1:999048366927:web:1120aca9e541873a93d33a"
+
 };
+
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db   = firebase.database();
 let storage = null;
 try { storage = firebase.storage(); } catch(e){ console.warn('Storage non init :', e); }
-
-    <script>
-// === PATCH DIAG AUTH ===
-console.log('[BOOT] Firebase init OK?', !!window.firebase);
-const auth = firebase.auth();
-const db   = firebase.database();
-
-// Log très visibles si Auth anonyme n'est pas active ou domaine non autorisé
-auth.signInAnonymously()
-  .then(()=> console.log('[AUTH] anonyme OK'))
-  .catch(e => {
-    console.error('[AUTH] échec', e);
-    alert('⚠️ Auth anonyme KO : ' + (e.code || e.message) + '\nVérifie: Authentication > Sign-in method > Anonymous (Enable)\nEt Authentication > Settings > Authorized domains (ajoute shoudin.github.io)');
-  });
-
-// Ouvre le menu Options dès que l'UID existe (pour vérifier que les listeners UI sont bien actifs)
-auth.onAuthStateChanged(u => {
-  console.log('[AUTH] state', u && u.uid);
-  if (u) {
-    // Si aucun pseudo connu, on déclenche l’ouverture du modal pseudo après rendu
-    const openMenu = () => {
-      const btn = document.getElementById('pseudoBtn');
-      if (btn) btn.click();
-    };
-    setTimeout(openMenu, 300);
-  }
-});
-</script>
-
-    
+   
 /* === (Tout le reste : ton code existant, SANS Cloudflare, inchangé) === */
 /* ----- Palette, grille, layout, listeners... ----- */
 
@@ -556,5 +536,6 @@ auth.onAuthStateChanged(user => {
   </script>
 </body>
 </html>
+
 
 
