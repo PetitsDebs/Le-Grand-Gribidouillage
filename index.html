@@ -309,17 +309,22 @@ window.addEventListener('unhandledrejection', (e) => {
   window.addEventListener('error', e => show(e.message || String(e)));
   window.addEventListener('unhandledrejection', e => show((e.reason && e.reason.message) || String(e.reason || e)));
 })();
-  // === Config Firebase (TA CONFIG) ===
-  const firebaseConfig = {
-    apiKey: "AIzaSyBCy1NFYox9035-xdx52cale0gzLa5am4I",
-    authDomain: "shoudinpixelwar.firebaseapp.com",
-    databaseURL: "https://shoudinpixelwar-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "shoudinpixelwar",
-    storageBucket: "shoudinpixelwar.appspot.com",
-    messagingSenderId: "896929635521",
-    appId: "1:896929635521:web:357f7b8a29cb5045684840",
-    measurementId: "G-FR7NC03RCY"
-  };
+    
+  // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCxWxz9Nf97tBwIilvCgqQ7yVk3gMPC4Cs",
+  authDomain: "le-grand-gribidouillage.firebaseapp.com",
+  projectId: "le-grand-gribidouillage",
+  storageBucket: "le-grand-gribidouillage.firebasestorage.app",
+  messagingSenderId: "999048366927",
+  appId: "1:999048366927:web:1120aca9e541873a93d33a"
+};
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
  
 firebase.initializeApp(firebaseConfig);
@@ -1844,3 +1849,4 @@ document.getElementById('countdown').innerHTML = '<span style="color:#b00020;fon
 
 </body>
 </html>
+
