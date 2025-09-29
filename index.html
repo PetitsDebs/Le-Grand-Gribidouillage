@@ -221,6 +221,35 @@ const db   = firebase.database();
 let storage = null;
 try { storage = firebase.storage(); } catch(e){ console.warn('Storage non init :', e); }
 
+    <script>
+// === PATCH DIAG AUTH ===
+console.log('[BOOT] Firebase init OK?', !!window.firebase);
+const auth = firebase.auth();
+const db   = firebase.database();
+
+// Log très visibles si Auth anonyme n'est pas active ou domaine non autorisé
+auth.signInAnonymously()
+  .then(()=> console.log('[AUTH] anonyme OK'))
+  .catch(e => {
+    console.error('[AUTH] échec', e);
+    alert('⚠️ Auth anonyme KO : ' + (e.code || e.message) + '\nVérifie: Authentication > Sign-in method > Anonymous (Enable)\nEt Authentication > Settings > Authorized domains (ajoute shoudin.github.io)');
+  });
+
+// Ouvre le menu Options dès que l'UID existe (pour vérifier que les listeners UI sont bien actifs)
+auth.onAuthStateChanged(u => {
+  console.log('[AUTH] state', u && u.uid);
+  if (u) {
+    // Si aucun pseudo connu, on déclenche l’ouverture du modal pseudo après rendu
+    const openMenu = () => {
+      const btn = document.getElementById('pseudoBtn');
+      if (btn) btn.click();
+    };
+    setTimeout(openMenu, 300);
+  }
+});
+</script>
+
+    
 /* === (Tout le reste : ton code existant, SANS Cloudflare, inchangé) === */
 /* ----- Palette, grille, layout, listeners... ----- */
 
@@ -527,4 +556,5 @@ auth.onAuthStateChanged(user => {
   </script>
 </body>
 </html>
+
 
