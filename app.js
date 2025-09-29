@@ -1,5 +1,5 @@
 // Remplace <REGION> et <PROJECT_ID> après déploiement
-const API_BASE = 'https://pixelwar-worker.shoudin.workers.dev';
+const API_BASE = 'https://<A_REMPLACER_APRES_DEPLOIEMENT_WORKER>';
 
 async function ensureNotIPBanned() {
   const res = await fetch(`${API_BASE}/ping`, { cache: 'no-store' });
@@ -73,5 +73,6 @@ canvas.addEventListener('click', async (e) => {
   if (c<=0) { alert('Pas assez de crédits. Scanne un QR pack.'); return; }
   grid[y][x] = selected; saveGrid(); setCredits(c-1); draw();
 });
+
 
 
