@@ -230,7 +230,88 @@ const db   = firebase.database();
 let storage = null;
 try { storage = firebase.storage(); } catch(e){ console.warn('Storage non init :', e); }
    
-/* === (Tout le reste : ton code existant, SANS Cloudflare, inchangé) === */
+<script>
+// === Menu Options & Pseudo (UI) ===
+const pseudoBtn        = document.getElementById('pseudoBtn');
+const pseudoMenuModal  = document.getElementById('pseudoMenuModal');
+const menuChangePseudo = document.getElementById('menuChangePseudo');
+const menuOpenAdmin    = document.getElementById('menuOpenAdmin');
+const menuClose        = document.getElementById('menuClose');
+
+const pseudoModal  = document.getElementById('pseudoModal');
+const pseudoInput  = document.getElementById('pseudoInput');
+const pseudoSave   = document.getElementById('pseudoSave');
+const pseudoCancel = document.getElementById('pseudoCancel');
+const pseudoError  = document.getElementById('pseudoError');
+
+function openPseudoMenu(){ pseudoMenuModal.hidden = false; }
+function closePseudoMenu(){ pseudoMenuModal.hidden = true; }
+function openPseudoModal(){ pseudoError.textContent=''; pseudoModal.hidden = false; setTimeout(()=>pseudoInput.focus(),0); }
+function closePseudoModal(){ pseudoModal.hidden = true; }
+
+pseudoBtn.addEventListener('click', openPseudoMenu);
+menuClose.addEventListener('click', closePseudoMenu);
+pseudoMenuModal.querySelector('.modal-backdrop').addEventListener('click', closePseudoMenu);
+menuChangePseudo.addEventListener('click', ()=>{ closePseudoMenu(); openPseudoModal(); });
+menuOpenAdmin.addEventListener('click', ()=> window.open('admin.html','_blank'));
+pseudoCancel.addEventListener('click', closePseudoModal);
+
+let CURRENT_UID = null;
+let myName = localStorage.getItem('nickname') || null;
+function updatePseudoBtn(){ pseudoBtn.textContent = 'Options'; }
+
+// Auth anonyme + chargement du pseudo
+auth.signInAnonymously().catch(console.error);
+auth.onAuthStateChanged(async (user)=>{
+  if (!user) return;
+  CURRENT_UID = user.uid;
+  updatePseudoBtn();
+
+  // Cherche un pseudo existant
+  try {
+    const s = await db.ref(`users/${CURRENT_UID}/name`).once('value');
+    const n = s.val();
+    if (n) {
+      myName = n; localStorage.setItem('nickname', n);
+    } else {
+      // Pas de pseudo → ouvrir la modale
+      openPseudoModal();
+    }
+  } catch (_) {
+    if (!myName) openPseudoModal();
+  }
+});
+
+// Helpers pseudo
+function normalizeName(s){ return s.trim(); }
+function toKey(s){ return s.toLowerCase().replace(/[^a-z0-9_]/g,''); }
+function isValidName(s){ return /^[A-Za-z0-9_]{3,20}$/.test(s); }
+
+async function savePseudo(){
+  const raw = normalizeName(pseudoInput.value);
+  if (!isValidName(raw)){ pseudoError.textContent = "Pseudo invalide (3–20 caractères alphanumériques ou underscore)."; return; }
+  if (!CURRENT_UID){ pseudoError.textContent = "Connexion en cours…"; return; }
+
+  const key = toKey(raw);
+  // Réservation du pseudo
+  const refClaim = db.ref(`users_by_name/${key}`);
+  const tx = await refClaim.transaction(cur => (cur === null || cur === CURRENT_UID) ? CURRENT_UID : undefined);
+  if (!tx.committed || tx.snapshot.val() !== CURRENT_UID){
+    pseudoError.textContent = "Ce pseudo est déjà pris.";
+    return;
+  }
+
+  await db.ref(`users/${CURRENT_UID}/name`).set(raw);
+  myName = raw;
+  localStorage.setItem('nickname', raw);
+  closePseudoModal();
+  document.dispatchEvent(new CustomEvent('pseudo:chosen'));
+}
+pseudoSave.addEventListener('click', savePseudo);
+pseudoInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') savePseudo(); });
+</script>
+
+    
 /* ----- Palette, grille, layout, listeners... ----- */
 
 /* Paramètres mosaïque */
@@ -490,6 +571,71 @@ showGridChk.addEventListener('change', ()=>{ localStorage.setItem('pw-show-grid'
 
 document.getElementById('countdown').innerHTML = '<span style="color:#b00020;font-weight:700">Ce soir&nbsp;Minuit</span>';
 
+<script>
+// === Pixels (RTDB) minimal ===
+const pixelsRef = db.ref('pixels');
+const clicksRef = db.ref('stats/clicksTotal');
+
+// Rendu initial des pixels
+pixelsRef.once('value').then(snap=>{
+  const val = snap.val() || {};
+  for (let y=0; y<H; y++){
+    for (let x=0; x<W; x++){
+      const k = `${x}_${y}`;
+      const v = val[k];
+      const idx = (v && Number.isFinite(+v.color)) ? +v.color : 1; // 1 = blanc
+      grid[y][x] = idx;
+    }
+  }
+  fullPixels();
+  if (showGridChk.checked) drawGridOverlay();
+});
+
+// Updates temps réel
+function onPixelUpdate(snap){
+  const [x,y] = snap.key.split('_').map(Number);
+  const v = snap.val() || {};
+  const col = Number.isFinite(+v.color) ? +v.color : 1;
+  if (x>=0 && x<W && y>=0 && y<H) {
+    grid[y][x] = col;
+    drawCell(x,y);
+    if (showGridChk.checked) drawGridOverlay();
+  }
+}
+function onPixelRemoved(snap){
+  const [x,y] = snap.key.split('_').map(Number);
+  if (x>=0 && x<W && y>=0 && y<H){
+    grid[y][x] = 1; // redevient blanc
+    drawCell(x,y);
+    if (showGridChk.checked) drawGridOverlay();
+  }
+}
+pixelsRef.on('child_added', onPixelUpdate);
+pixelsRef.on('child_changed', onPixelUpdate);
+pixelsRef.on('child_removed', onPixelRemoved);
+
+// Click sur le canvas → écrit un pixel
+function writePixel(x,y,idx){
+  const key = `${x}_${y}`;
+  const payload = { color: idx, author: CURRENT_UID || 'anon', ts: firebase.database.ServerValue.TIMESTAMP };
+  return db.ref(`pixels/${key}`).set(payload)
+    .then(()=> clicksRef.set(firebase.database.ServerValue.increment(1)));
+}
+
+canvas.addEventListener('click', (e)=>{
+  if (!myName){ openPseudoModal(); return; } // impose le choix d’un pseudo
+  const rect = canvas.getBoundingClientRect();
+  const localX = (e.clientX - rect.left) / zoom;
+  const localY = (e.clientY - rect.top)  / zoom;
+  const x = Math.floor(localX / PIX), y = Math.floor(localY / PIX);
+  if (x<0||x>=W||y<0||y>=H) return;
+  // Gomme = remet blanc (index 1). Si tu préfères supprimer le nœud, on peut faire set(null) + règles adaptées.
+  const idx = selectedIsEraser ? 1 : selected;
+  writePixel(x,y,idx).catch(console.error);
+});
+</script>
+
+    
 /* Auth anonyme + présence + pixels… (ton code existant, sans fetch vers Cloudflare) */
 let CURRENT_UID = null;
 auth.signInAnonymously().catch(console.error);
@@ -536,6 +682,7 @@ auth.onAuthStateChanged(user => {
   </script>
 </body>
 </html>
+
 
 
 
