@@ -255,29 +255,6 @@
       <p id="pseudoError" class="error" aria-live="polite"></p>
     </div>
   </div>
-  
-  <!-- Anti-ban: cache la page et vérifie /ping AVANT toute initialisation -->
-  <script>
-  // Cache immédiatement (évite les flashes)
-  document.documentElement.style.visibility = 'hidden';
-</script>
-<script>
-  (async () => {
-    const sleep = ms => new Promise(r => setTimeout(r, ms));
-    try {
-      // Course : /ping OU timeout — on ne bloque jamais l’UI
-      await Promise.race([
-        (typeof ensureNotIPBanned === 'function' ? ensureNotIPBanned() : Promise.resolve()),
-        sleep(1200)
-      ]);
-    } catch (_) {
-      // ignore
-    } finally {
-      document.documentElement.style.visibility = 'visible';
-    }
-  })();
-</script>
-
 
   <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" crossorigin="anonymous"></script>
@@ -311,7 +288,6 @@ window.addEventListener('unhandledrejection', (e) => {
 })();
     
   // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 // Your web app's Firebase configuration
@@ -322,12 +298,12 @@ const firebaseConfig = {
   storageBucket: "le-grand-gribidouillage.firebasestorage.app",
   messagingSenderId: "999048366927",
   appId: "1:999048366927:web:1120aca9e541873a93d33a"
+  databaseURL: "https://le-grand-gribidouillage-default-rtdb.europe-west1.firebasedatabase.app"
 };
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
- 
 firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+    
 
 // --- [NOUVEAU] Watchers Firebase propres (compat API) ---
 const _fbListeners = new Map(); // path -> { ref, cb }
@@ -1197,15 +1173,6 @@ window.addEventListener('pagehide', flushClicks);
     if (!user) return;
     CURRENT_UID = user.uid;
 
-  // --- NEW: déclarer l'UID au Worker (map UID -> IP)
-  try {
-    fetch('https://pixelwar-worker.shoudin.workers.dev/track', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ uid: CURRENT_UID })
-    }).catch(()=>{});
-  } catch(e) {}
-
   watchValue(`users/${CURRENT_UID}/name`, (s)=>{
   _isApplyingRemote = true;
   try {
@@ -1849,4 +1816,5 @@ document.getElementById('countdown').innerHTML = '<span style="color:#b00020;fon
 
 </body>
 </html>
+
 
