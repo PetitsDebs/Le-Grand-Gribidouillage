@@ -843,24 +843,25 @@
   }
 
   // ---- RESET MOSAÏQUE (Firebase only) ----
-  async function doMosaicResetFirebaseOnly(){
-    // Efface pixels -> remet blanc ; purge history ; reset compteurs + marque lastReset
-    // 1) Pixels -> blanc
-    const pixSnap = await db.ref('pixels').once('value');
-    const pix = pixSnap.val() || {};
-    const upd1 = {};
-    Object.keys(pix).forEach(k=>{
-      upd1['pixels/'+k] = { color: 1, author: null, ts: null };
-    });
-    // 2) History -> remove complet
-    const upd2 = { 'history': null };
-    // 3) Compteurs + meta
-    const upd3 = {
-      'stats/clicksTotal': 0,
-      'config/lastResetAt': firebase.database.ServerValue.TIMESTAMP
-    };
-    await db.ref().update(Object.assign({}, upd1, upd2, upd3));
-  }
+async function doMosaicResetFirebaseOnly(){
+  // 1) Supprimer tous les pixels (delete -> autorisé par tes rules)
+  const pixSnap = await db.ref('pixels').once('value');
+  const pix = pixSnap.val() || {};
+  const updates = {};
+
+  Object.keys(pix).forEach(k=>{
+    updates['pixels/'+k] = null;           // ✅ delete (pas de validation)
+  });
+
+  // 2) Purger l'historique
+  updates['history'] = null;                // ✅ delete
+
+  // 3) Marquer le reset (on ne touche PAS à clicksTotal, tes rules l’empêchent)
+  updates['config/lastResetAt'] = firebase.database.ServerValue.TIMESTAMP;
+
+  await db.ref().update(updates);
+}
+
 
   // ---------- Init ----------
   loadBoardToPreview();
@@ -877,3 +878,4 @@
   </script>
 </body>
 </html>
+
