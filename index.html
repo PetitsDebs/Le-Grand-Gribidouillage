@@ -252,16 +252,30 @@
   menuOpenAdmin.addEventListener('click', ()=> window.open(ADMIN_URL, '_blank', 'noopener'));
   pseudoCancel.addEventListener('click', closePseudoModal);
 
-   function downloadBoardPNG(scale = 4){
-  try{
-    const src = document.getElementById('board'); // canvas affiché
-    const out = document.createElement('canvas');
-    out.width  = src.width  * scale;
-    out.height = src.height * scale;
-    const octx = out.getContext('2d');
-    octx.imageSmoothingEnabled = false;
-    octx.drawImage(src, 0, 0, out.width, out.height);
+  // --- Rendu offscreen SANS grille, puis export PNG net ---
+function renderBoardOffscreen(scale = 4){
+  // scale = 4 => 1200×1200 si 300×300 logiques et PIX=1 (ici PIX est la taille de cellule en px écran)
+  const cell = PIX * scale;
+  const off = document.createElement('canvas');
+  off.width  = W * cell;
+  off.height = H * cell;
+  const octx = off.getContext('2d');
+  octx.imageSmoothingEnabled = false;
 
+  // Peint chaque cellule depuis notre "grid" mémoire, SANS overlay de grille
+  for (let y = 0; y < H; y++){
+    for (let x = 0; x < W; x++){
+      const idx = grid[y][x] | 0;
+      octx.fillStyle = colors[idx] || '#FFFFFF';
+      octx.fillRect(x * cell, y * cell, cell, cell);
+    }
+  }
+  return off;
+}
+
+function downloadBoardPNG(scale = 4){
+  try{
+    const off = renderBoardOffscreen(scale); // <-- pas de grille ici
     const save = (url) => {
       const a = document.createElement('a');
       a.href = url;
@@ -269,15 +283,15 @@
       document.body.appendChild(a); a.click(); a.remove();
     };
 
-    if (out.toBlob){
-      out.toBlob((blob)=>{
-        if (!blob) return save(out.toDataURL('image/png'));
+    if (off.toBlob){
+      off.toBlob((blob)=>{
+        if (!blob) return save(off.toDataURL('image/png'));
         const url = URL.createObjectURL(blob);
         save(url);
         setTimeout(()=> URL.revokeObjectURL(url), 2000);
       }, 'image/png');
     } else {
-      save(out.toDataURL('image/png'));
+      save(off.toDataURL('image/png'));
     }
   } catch(e){
     console.error('[downloadBoardPNG]', e);
@@ -285,10 +299,12 @@
   }
 }
 
+// Bouton du menu Options
 menuDownloadPNG.addEventListener('click', ()=>{
-  closePseudoMenu();      // referme le menu pour l’UX
-  downloadBoardPNG(4);    // export x4 net (1200×1200 si board logique 300×300)
+  closePseudoMenu();
+  downloadBoardPNG(4); // PNG net x4
 });
+
  
     
   let CURRENT_UID = null;
@@ -764,7 +780,7 @@ document.addEventListener('auth:ready', ensurePresenceBinding);
     <div class="rules-modal">
       <h2 id="rulesTitle">Règles</h2>
       <p>Toute représentation offensante, violente ou à caractère sexuel sera suivie d’un bannissement permanent du site.</p>
-      <p>Merci de respecter les règles du vivre-ensemble pour faire de cet endroit un espace de création partagé agréable pour tous.</p>
+      <p>Merci de respecter les règles du vivre-ensemble pour faire de cet endroit un espace de création partagé agréable pour toutes et tous.</p>
       <div class="rules-actions">
         <span id="rulesCount" class="rules-count">OK disponible dans 10&nbsp;s</span>
         <button id="rulesOkBtn" class="rules-ok" disabled>OK</button>
@@ -797,6 +813,7 @@ document.addEventListener('auth:ready', ensurePresenceBinding);
   </script>
 </body>
 </html>
+
 
 
 
