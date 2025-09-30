@@ -230,6 +230,7 @@
   const pseudoMenuModal  = document.getElementById('pseudoMenuModal');
   const menuChangePseudo = document.getElementById('menuChangePseudo');
   const menuOpenAdmin    = document.getElementById('menuOpenAdmin');
+  const ADMIN_URL = `${location.origin}/admin.html`;
   const menuClose        = document.getElementById('menuClose');
 
   const pseudoModal  = document.getElementById('pseudoModal');
@@ -247,7 +248,7 @@
   menuClose.addEventListener('click', closePseudoMenu);
   pseudoMenuModal.querySelector('.modal-backdrop').addEventListener('click', closePseudoMenu);
   menuChangePseudo.addEventListener('click', ()=>{ closePseudoMenu(); openPseudoModal(); });
-  menuOpenAdmin.addEventListener('click', ()=> window.open('admin.html','_blank'));
+  menuOpenAdmin.addEventListener('click', ()=> window.open(ADMIN_URL, '_blank', 'noopener'));
   pseudoCancel.addEventListener('click', closePseudoModal);
 
   let CURRENT_UID = null;
@@ -260,6 +261,8 @@
     if (!user) return;
     CURRENT_UID = user.uid;
     updatePseudoBtn();
+    // Signale que l'UID est dispo (pour la présence)
+    document.dispatchEvent(new CustomEvent('auth:ready'));
 
     try {
       const s = await db.ref(`users/${CURRENT_UID}/name`).once('value');
@@ -354,6 +357,49 @@
   const uiSizePlus   = document.getElementById('uiSizePlus');
   const trackerXY  = trackerTip.querySelector('.xy');
   const trackerMeta= trackerTip.querySelector('.meta');
+    let trackerEnabled = false;
+
+function setTracker(on){
+  trackerEnabled = !!on;
+  trackerTip.style.display = trackerEnabled ? 'block' : 'none';
+}
+
+trackerToggle.addEventListener('click', ()=>{
+  setTracker(!trackerEnabled);
+});
+
+// Mise à jour coord + tooltip
+canvas.addEventListener('mousemove', (e)=>{
+  const rect = canvas.getBoundingClientRect();
+  const localX = (e.clientX - rect.left) / zoom;
+  const localY = (e.clientY - rect.top)  / zoom;
+  const x = Math.floor(localX / PIX), y = Math.floor(localY / PIX);
+
+  // Affichage coord
+  if (x>=0 && x<W && y>=0 && y<H) {
+    coordsEl.textContent = `(${x}, ${y})`;
+    if (trackerEnabled){
+      trackerXY.textContent = `(${x}, ${y})`;
+      const colIdx = grid[y][x] ?? 1;
+      const hex = colors[colIdx] || '#FFFFFF';
+      trackerMeta.textContent = hex.toUpperCase();
+      // Place le tooltip un chouïa au-dessus du curseur
+      trackerTip.style.left = `${e.clientX}px`;
+      trackerTip.style.top  = `${e.clientY - 12}px`;
+    }
+  } else {
+    coordsEl.textContent = '—';
+  }
+});
+
+canvas.addEventListener('mouseleave', ()=>{
+  coordsEl.textContent = '—';
+  if (trackerEnabled) trackerTip.style.display = 'none';
+});
+canvas.addEventListener('mouseenter', ()=>{
+  if (trackerEnabled) trackerTip.style.display = 'block';
+});
+
 
   const SCALE_STEPS = [0.75, 1, 1.25];
   function clampIndex(i){ return Math.max(0, Math.min(SCALE_STEPS.length-1, i)); }
@@ -567,6 +613,31 @@
   // === Pixels (RTDB) minimal ===
   const pixelsRef = db.ref('pixels');
   const clicksRef = db.ref('stats/clicksTotal');
+clicksRef.on('value', (snap)=>{
+  const n = snap.val();
+  clickEl.textContent = Number.isFinite(n) ? n : 0;
+});
+    // === Présence (nombre de connectés) ===
+const connectedRef = db.ref('.info/connected');
+
+function ensurePresenceBinding(){
+  if (!CURRENT_UID) return; // on attend l'auth anonyme
+  const userPresenceRef = db.ref(`presence/${CURRENT_UID}`);
+  connectedRef.on('value', (snap)=>{
+    if (snap.val() === true) {
+      // marque présent et nettoie à la déconnexion
+      userPresenceRef.onDisconnect().remove();
+      userPresenceRef.set({ ts: firebase.database.ServerValue.TIMESTAMP });
+    }
+  });
+  // Afficher le nombre de connectés
+  db.ref('presence').on('value', (snap)=>{
+    onlineEl.textContent = snap.numChildren();
+  });
+}
+
+// Quand l’auth est prête, on attache la présence (on a CURRENT_UID dans onAuthStateChanged)
+document.addEventListener('auth:ready', ensurePresenceBinding);
 
   // Rendu initial des pixels
   pixelsRef.once('value').then(snap=>{
@@ -670,3 +741,4 @@
   </script>
 </body>
 </html>
+
