@@ -98,6 +98,12 @@
     .rules-ok{ appearance: none; border: 0; border-radius: 12px; padding: 10px 16px; font-weight: 600; background:#111; color:#fff; cursor:not-allowed; opacity:.6; }
     .rules-ok.enabled{ cursor:pointer; opacity:1; }
     .rules-count{ font-size: 12px; color:#666; margin-right:auto; align-self:center; }
+    #trackerToggle.on{
+    background:#1976d2;
+    color:#fff;
+    border-color:#1976d2;
+}
+
   </style>
 </head>
 <body>
@@ -413,40 +419,57 @@ menuDownloadPNG.addEventListener('click', ()=>{
   const uiSizePlus   = document.getElementById('uiSizePlus');
   const trackerXY  = trackerTip.querySelector('.xy');
   const trackerMeta= trackerTip.querySelector('.meta');
+    // Cache pseudo par UID
+const nameCache = new Map();
+function uidShort(u){ return (u||'').slice(0,6) || '—'; }
+function getPseudo(uid){
+  if (!uid) return Promise.resolve('—');
+  if (nameCache.has(uid)) return Promise.resolve(nameCache.get(uid));
+  return db.ref(`users/${uid}/name`).once('value').then(s=>{
+    const n = s.val();
+    const name = (typeof n === 'string' && n.trim()) ? n.trim() : uidShort(uid);
+    nameCache.set(uid, name);
+    return name;
+  }).catch(()=> uidShort(uid));
+}
     let trackerEnabled = false;
 
 function setTracker(on){
   trackerEnabled = !!on;
   trackerTip.style.display = trackerEnabled ? 'block' : 'none';
+  trackerToggle.classList.toggle('on', trackerEnabled);
+  trackerToggle.setAttribute('aria-pressed', trackerEnabled ? 'true' : 'false');
 }
+
 
 trackerToggle.addEventListener('click', ()=>{
   setTracker(!trackerEnabled);
 });
 
-// Mise à jour coord + tooltip
 canvas.addEventListener('mousemove', (e)=>{
   const rect = canvas.getBoundingClientRect();
   const localX = (e.clientX - rect.left) / zoom;
   const localY = (e.clientY - rect.top)  / zoom;
   const x = Math.floor(localX / PIX), y = Math.floor(localY / PIX);
 
-  // Affichage coord
   if (x>=0 && x<W && y>=0 && y<H) {
     coordsEl.textContent = `(${x}, ${y})`;
     if (trackerEnabled){
       trackerXY.textContent = `(${x}, ${y})`;
-      const colIdx = grid[y][x] ?? 1;
-      const hex = colors[colIdx] || '#FFFFFF';
-      trackerMeta.textContent = hex.toUpperCase();
-      // Place le tooltip un chouïa au-dessus du curseur
+      const uid = authorGrid[y][x];           // ← on lit l’auteur
+      getPseudo(uid).then(name=>{             // ← on résout le pseudo (avec cache)
+        trackerMeta.textContent = name;
+      });
       trackerTip.style.left = `${e.clientX}px`;
       trackerTip.style.top  = `${e.clientY - 12}px`;
+      trackerTip.style.display = 'block';
     }
   } else {
     coordsEl.textContent = '—';
+    if (trackerEnabled) trackerTip.style.display = 'none';
   }
 });
+
 
 canvas.addEventListener('mouseleave', ()=>{
   coordsEl.textContent = '—';
@@ -711,40 +734,47 @@ function ensurePresenceBinding(){
 // Quand l’auth est prête, on attache la présence (on a CURRENT_UID dans onAuthStateChanged)
 document.addEventListener('auth:ready', ensurePresenceBinding);
 
-  // Rendu initial des pixels
-  pixelsRef.once('value').then(snap=>{
-    const val = snap.val() || {};
-    for (let y=0; y<H; y++){
-      for (let x=0; x<W; x++){
-        const k = `${x}_${y}`;
-        const v = val[k];
-        const idx = (v && Number.isFinite(+v.color)) ? +v.color : 1; // 1 = blanc
-        grid[y][x] = idx;
-      }
+ // Rendu initial des pixels (+ auteurs + timestamps)
+pixelsRef.once('value').then(snap=>{
+  const val = snap.val() || {};
+  for (let y=0; y<H; y++){
+    for (let x=0; x<W; x++){
+      const k = `${x}_${y}`;
+      const v = val[k] || {};
+      const idx = (Number.isFinite(+v.color)) ? +v.color : 1; // 1 = blanc
+      grid[y][x]       = idx;
+      authorGrid[y][x] = v.author || null;
+      tsGrid[y][x]     = Number.isFinite(+v.ts) ? +v.ts : null;
     }
-    fullPixels();
-    if (showGridChk.checked) drawGridOverlay();
-  });
+  }
+  fullPixels();
+  if (showGridChk.checked) drawGridOverlay();
+});
 
-  // Updates temps réel
+
   function onPixelUpdate(snap){
-    const [x,y] = snap.key.split('_').map(Number);
-    const v = snap.val() || {};
-    const col = Number.isFinite(+v.color) ? +v.color : 1;
-    if (x>=0 && x<W && y>=0 && y<H) {
-      grid[y][x] = col;
-      drawCell(x,y);
-      if (showGridChk.checked) drawGridOverlay();
-    }
+  const [x,y] = snap.key.split('_').map(Number);
+  const v = snap.val() || {};
+  const col = Number.isFinite(+v.color) ? +v.color : 1;
+  if (x>=0 && x<W && y>=0 && y<H) {
+    grid[y][x]       = col;
+    authorGrid[y][x] = v.author || null;
+    tsGrid[y][x]     = Number.isFinite(+v.ts) ? +v.ts : null;
+    drawCell(x,y);
+    if (showGridChk.checked) drawGridOverlay();
   }
-  function onPixelRemoved(snap){
-    const [x,y] = snap.key.split('_').map(Number);
-    if (x>=0 && x<W && y>=0 && y<H){
-      grid[y][x] = 1; // redevient blanc
-      drawCell(x,y);
-      if (showGridChk.checked) drawGridOverlay();
-    }
+}
+function onPixelRemoved(snap){
+  const [x,y] = snap.key.split('_').map(Number);
+  if (x>=0 && x<W && y>=0 && y<H){
+    grid[y][x]       = 1;      // blanc
+    authorGrid[y][x] = null;
+    tsGrid[y][x]     = null;
+    drawCell(x,y);
+    if (showGridChk.checked) drawGridOverlay();
   }
+}
+
   pixelsRef.on('child_added', onPixelUpdate);
   pixelsRef.on('child_changed', onPixelUpdate);
   pixelsRef.on('child_removed', onPixelRemoved);
@@ -813,6 +843,7 @@ document.addEventListener('auth:ready', ensurePresenceBinding);
   </script>
 </body>
 </html>
+
 
 
 
