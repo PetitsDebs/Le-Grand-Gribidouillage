@@ -230,7 +230,7 @@
   const pseudoMenuModal  = document.getElementById('pseudoMenuModal');
   const menuChangePseudo = document.getElementById('menuChangePseudo');
   const menuOpenAdmin    = document.getElementById('menuOpenAdmin');
-  const ADMIN_URL = `${location.origin}/admin.html`;
+  const ADMIN_URL = new URL('./admin.html', location.href).toString();
   const menuClose        = document.getElementById('menuClose');
 
   const pseudoModal  = document.getElementById('pseudoModal');
@@ -741,4 +741,5 @@ document.addEventListener('auth:ready', ensurePresenceBinding);
   </script>
 </body>
 </html>
+
 
