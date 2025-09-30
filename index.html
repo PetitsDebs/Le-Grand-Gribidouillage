@@ -232,7 +232,8 @@
   const menuOpenAdmin    = document.getElementById('menuOpenAdmin');
   const ADMIN_URL = new URL('./admin.html', location.href).toString();
   const menuClose        = document.getElementById('menuClose');
-
+  const menuDownloadPNG = document.getElementById('menuDownloadPNG');
+    
   const pseudoModal  = document.getElementById('pseudoModal');
   const pseudoInput  = document.getElementById('pseudoInput');
   const pseudoSave   = document.getElementById('pseudoSave');
@@ -251,6 +252,45 @@
   menuOpenAdmin.addEventListener('click', ()=> window.open(ADMIN_URL, '_blank', 'noopener'));
   pseudoCancel.addEventListener('click', closePseudoModal);
 
+   function downloadBoardPNG(scale = 4){
+  try{
+    const src = document.getElementById('board'); // canvas affiché
+    const out = document.createElement('canvas');
+    out.width  = src.width  * scale;
+    out.height = src.height * scale;
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = false;
+    octx.drawImage(src, 0, 0, out.width, out.height);
+
+    const save = (url) => {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gribidouillage_${Date.now()}_x${scale}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+
+    if (out.toBlob){
+      out.toBlob((blob)=>{
+        if (!blob) return save(out.toDataURL('image/png'));
+        const url = URL.createObjectURL(blob);
+        save(url);
+        setTimeout(()=> URL.revokeObjectURL(url), 2000);
+      }, 'image/png');
+    } else {
+      save(out.toDataURL('image/png'));
+    }
+  } catch(e){
+    console.error('[downloadBoardPNG]', e);
+    alert('Export PNG impossible (voir console).');
+  }
+}
+
+menuDownloadPNG.addEventListener('click', ()=>{
+  closePseudoMenu();      // referme le menu pour l’UX
+  downloadBoardPNG(4);    // export x4 net (1200×1200 si board logique 300×300)
+});
+ 
+    
   let CURRENT_UID = null;
   let myName = localStorage.getItem('nickname') || null;
   function updatePseudoBtn(){ pseudoBtn.textContent = 'Options'; }
@@ -621,20 +661,36 @@ clicksRef.on('value', (snap)=>{
 const connectedRef = db.ref('.info/connected');
 
 function ensurePresenceBinding(){
-  if (!CURRENT_UID) return; // on attend l'auth anonyme
+  if (!CURRENT_UID) return; // on attend l’auth anonyme
   const userPresenceRef = db.ref(`presence/${CURRENT_UID}`);
+
   connectedRef.on('value', (snap)=>{
     if (snap.val() === true) {
-      // marque présent et nettoie à la déconnexion
-      userPresenceRef.onDisconnect().remove();
-      userPresenceRef.set({ ts: firebase.database.ServerValue.TIMESTAMP });
+      // A la déco → supprime le nœud (OK avec tes règles)
+      userPresenceRef.onDisconnect().remove().catch(err=>{
+        console.error('[presence.onDisconnect.remove] rules?', err);
+      });
+
+      // En ligne → DOIT respecter la validation: { online:boolean, ts:number }
+      userPresenceRef.set({
+        online: true,
+        ts: firebase.database.ServerValue.TIMESTAMP
+      }).catch(err=>{
+        console.error('[presence.set] rules?', err);
+      });
+
+      // (optionnel) dernière vue pour l’admin
+      db.ref(`users/${CURRENT_UID}/lastSeen`).set(firebase.database.ServerValue.TIMESTAMP)
+        .catch(()=>{});
     }
   });
+
   // Afficher le nombre de connectés
   db.ref('presence').on('value', (snap)=>{
     onlineEl.textContent = snap.numChildren();
   });
 }
+
 
 // Quand l’auth est prête, on attache la présence (on a CURRENT_UID dans onAuthStateChanged)
 document.addEventListener('auth:ready', ensurePresenceBinding);
@@ -741,5 +797,6 @@ document.addEventListener('auth:ready', ensurePresenceBinding);
   </script>
 </body>
 </html>
+
 
 
