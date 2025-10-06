@@ -883,6 +883,18 @@ pixelsRef.once('value').then(snap=>{
   if (showGridChk.checked) drawGridOverlay();
 });
 
+    /* === Optimisation dessin grille === */
+let _gridNeeds = false;
+function scheduleGridOverlay(){
+  if (!showGridChk.checked) return;
+  if (_gridNeeds) return;
+  _gridNeeds = true;
+  requestAnimationFrame(()=>{
+    _gridNeeds = false;
+    drawGridOverlay();
+  });
+}
+
 
   function onPixelUpdate(snap){
   const [x,y] = snap.key.split('_').map(Number);
@@ -975,6 +987,7 @@ function onPixelRemoved(snap){
   </script>
 </body>
 </html>
+
 
 
 
