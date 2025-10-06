@@ -419,6 +419,7 @@ menuDownloadPNG.addEventListener('click', ()=>{
   const uiSizePlus   = document.getElementById('uiSizePlus');
   const trackerXY  = trackerTip.querySelector('.xy');
   const trackerMeta= trackerTip.querySelector('.meta');
+
     // Cache pseudo par UID
 const nameCache = new Map();
 function uidShort(u){ return (u||'').slice(0,6) || '—'; }
@@ -650,6 +651,65 @@ canvas.addEventListener('mouseenter', ()=>{
     _pal_lastW = barW;
   }
 
+
+    /* ===== UI & Palette scale (boutons + persistance) ===== */
+(function uiPalScaling(){
+  const root = document.documentElement;
+  const UI_KEY  = 'pw-ui-scale';
+  const PAL_KEY = 'pw-pal-scale';
+
+  const UI_MIN = 0.8, UI_MAX = 1.6, UI_STEP = 0.1;
+  const PAL_MIN = 0.8, PAL_MAX = 1.6, PAL_STEP = 0.1;
+
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+  function round1(v){ return Math.round(v*10)/10; }
+
+  function getVar(name, fallback){
+    const saved = parseFloat(localStorage.getItem(name === '--ui-scale' ? UI_KEY : PAL_KEY));
+    if (Number.isFinite(saved)) return saved;
+    // sinon on lit la var CSS courante
+    const cs = getComputedStyle(root).getPropertyValue(name).trim();
+    const cur = parseFloat(cs);
+    return Number.isFinite(cur) ? cur : fallback;
+  }
+
+  function setUIScale(v){
+    v = round1(clamp(v, UI_MIN, UI_MAX));
+    root.style.setProperty('--ui-scale', String(v));
+    localStorage.setItem(UI_KEY, String(v));
+    scheduleRelayout(); // la hauteur du header change => recalc viewport
+  }
+  function setPalScale(v){
+    v = round1(clamp(v, PAL_MIN, PAL_MAX));
+    root.style.setProperty('--pal-scale', String(v));
+    localStorage.setItem(PAL_KEY, String(v));
+    scheduleRelayout(); // la palette change de taille => recalc bottom
+  }
+
+  // Init à partir du stockage
+  setUIScale(getVar('--ui-scale', 1));
+  setPalScale(getVar('--pal-scale', 1));
+
+  // Bindings boutons
+  if (uiSizeMinus) uiSizeMinus.addEventListener('click', ()=>{
+    const cur = parseFloat(getComputedStyle(root).getPropertyValue('--ui-scale')) || 1;
+    setUIScale(cur - UI_STEP);
+  });
+  if (uiSizePlus) uiSizePlus.addEventListener('click', ()=>{
+    const cur = parseFloat(getComputedStyle(root).getPropertyValue('--ui-scale')) || 1;
+    setUIScale(cur + UI_STEP);
+  });
+
+  if (palSizeMinus) palSizeMinus.addEventListener('click', ()=>{
+    const cur = parseFloat(getComputedStyle(root).getPropertyValue('--pal-scale')) || 1;
+    setPalScale(cur - PAL_STEP);
+  });
+  if (palSizePlus) palSizePlus.addEventListener('click', ()=>{
+    const cur = parseFloat(getComputedStyle(root).getPropertyValue('--pal-scale')) || 1;
+    setPalScale(cur + PAL_STEP);
+  });
+})();
+    
   /* Zoom & layout */
   let _sizer_w=-1,_sizer_h=-1;
   function updateSizer(){
@@ -987,12 +1047,3 @@ function onPixelRemoved(snap){
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
