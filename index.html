@@ -734,6 +734,46 @@ canvas.addEventListener('mouseenter', ()=>{
   viewport.addEventListener('pointercancel', onUpOrCancel, { passive:false });
 })();
 
+    /* ===== Pinch sur trackpad (Ctrl/⌘ + molette) + Safari gestures ===== */
+(function enableTrackpadPinch(){
+  // — Ctrl/⌘ + wheel → zoom autour du pointeur (Chrome/Edge/Firefox)
+  const WHEEL_SENS = 0.0025; // plus petit = zoom plus doux
+
+  function onWheel(e){
+    // La plupart des OS déclenchent ctrlKey pendant un pinch trackpad
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.deltaY === 0) return;
+
+    e.preventDefault(); // empêche le zoom navigateur et le scroll
+    // Exponentiel lissé (insensible au deltaMode)
+    const scale = Math.exp(-e.deltaY * WHEEL_SENS);
+    const newZ  = clampZoom(zoom * scale);
+    setZoomAroundPoint(newZ, e.clientX, e.clientY);
+  }
+
+  viewport.addEventListener('wheel', onWheel, { passive:false });
+
+  // — Safari : événements non standards gesturestart/gesturechange
+  let safariBaseZoom = 1;
+
+  function onGestureStart(e){
+    safariBaseZoom = zoom;
+    e.preventDefault();
+  }
+  function onGestureChange(e){
+    // e.scale est relatif au gesturestart
+    const newZ = clampZoom(safariBaseZoom * e.scale);
+    // Safari ne donne pas le centre → on zoome autour du centre du viewport
+    const r = viewport.getBoundingClientRect();
+    setZoomAroundPoint(newZ, r.left + r.width/2, r.top + r.height/2);
+    e.preventDefault();
+  }
+
+  window.addEventListener('gesturestart',  onGestureStart,  { passive:false });
+  window.addEventListener('gesturechange', onGestureChange, { passive:false });
+})();
+
+
 
   /* État palette & layout init */
   buildPalette();
@@ -907,6 +947,7 @@ function onPixelRemoved(snap){
   </script>
 </body>
 </html>
+
 
 
 
