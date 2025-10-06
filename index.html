@@ -445,21 +445,42 @@ function setTracker(on){
 trackerToggle.addEventListener('click', ()=>{
   setTracker(!trackerEnabled);
 });
+    
+let _hoverLastX = -1, _hoverLastY = -1, _hoverLastUID = null;
 
 canvas.addEventListener('mousemove', (e)=>{
-  const rect = canvas.getBoundingClientRect();
+  const rect = _canvasRect || canvas.getBoundingClientRect();
   const localX = (e.clientX - rect.left) / zoom;
   const localY = (e.clientY - rect.top)  / zoom;
   const x = Math.floor(localX / PIX), y = Math.floor(localY / PIX);
 
   if (x>=0 && x<W && y>=0 && y<H) {
+    // si même cellule qu'à la frame précédente, on ne refait rien de lourd
+    if (x === _hoverLastX && y === _hoverLastY){
+      if (trackerEnabled){
+        trackerTip.style.left = `${e.clientX}px`;
+        trackerTip.style.top  = `${e.clientY - 12}px`;
+      }
+      return;
+    }
+    _hoverLastX = x; _hoverLastY = y;
+
     coordsEl.textContent = `(${x}, ${y})`;
     if (trackerEnabled){
       trackerXY.textContent = `(${x}, ${y})`;
-      const uid = authorGrid[y][x];           // ← on lit l’auteur
-      getPseudo(uid).then(name=>{             // ← on résout le pseudo (avec cache)
-        trackerMeta.textContent = name;
-      });
+      const uid = authorGrid[y][x] || null;
+
+      // Ne résout le pseudo QUE si l’UID change
+      if (uid !== _hoverLastUID){
+        _hoverLastUID = uid;
+        getPseudo(uid).then(name=>{
+          // sécurité : ne change le texte que si on est toujours sur la même cellule
+          if (x === _hoverLastX && y === _hoverLastY) {
+            trackerMeta.textContent = name;
+          }
+        });
+      }
+
       trackerTip.style.left = `${e.clientX}px`;
       trackerTip.style.top  = `${e.clientY - 12}px`;
       trackerTip.style.display = 'block';
@@ -470,14 +491,20 @@ canvas.addEventListener('mousemove', (e)=>{
   }
 });
 
-
 canvas.addEventListener('mouseleave', ()=>{
+  // reset du cache hover pour stopper toute résolution de pseudo en cours
+  _hoverLastX = -1;
+  _hoverLastY = -1;
+  _hoverLastUID = null;
+
   coordsEl.textContent = '—';
   if (trackerEnabled) trackerTip.style.display = 'none';
 });
+
 canvas.addEventListener('mouseenter', ()=>{
   if (trackerEnabled) trackerTip.style.display = 'block';
 });
+
 
 
   const SCALE_STEPS = [0.75, 1, 1.25];
@@ -741,6 +768,7 @@ canvas.addEventListener('mouseenter', ()=>{
 
   function onWheel(e){
     // La plupart des OS déclenchent ctrlKey pendant un pinch trackpad
+    if (Math.abs(e.deltaY) < 0.2) return;
     if (!(e.ctrlKey || e.metaKey)) return;
     if (e.deltaY === 0) return;
 
@@ -865,7 +893,7 @@ pixelsRef.once('value').then(snap=>{
     authorGrid[y][x] = v.author || null;
     tsGrid[y][x]     = Number.isFinite(+v.ts) ? +v.ts : null;
     drawCell(x,y);
-    if (showGridChk.checked) drawGridOverlay();
+    scheduleGridOverlay();
   }
 }
 function onPixelRemoved(snap){
@@ -875,7 +903,7 @@ function onPixelRemoved(snap){
     authorGrid[y][x] = null;
     tsGrid[y][x]     = null;
     drawCell(x,y);
-    if (showGridChk.checked) drawGridOverlay();
+    scheduleGridOverlay();
   }
 }
 
@@ -947,6 +975,7 @@ function onPixelRemoved(snap){
   </script>
 </body>
 </html>
+
 
 
 
