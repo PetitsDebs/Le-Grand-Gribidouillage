@@ -670,6 +670,70 @@ canvas.addEventListener('mouseenter', ()=>{
   document.getElementById('zReset').onclick = ()=>{ zoom = 1; applyZoom(); clampScroll(); };
   document.getElementById('dockZIn').onclick  = zoomIn;
   document.getElementById('dockZOut').onclick = zoomOut;
+    /* ===== Pinch-to-zoom (deux doigts) =====
+   - 1 doigt : on laisse le scroll natif du #viewport
+   - 2 doigts : pinch custom qui appelle setZoomAroundPoint()
+*/
+(function enablePinch(){
+  const ptrs = new Map();   // id -> {x,y}
+  let pinch = null;         // {startDist, baseZoom}
+
+  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+  function center(a,b){ return { x: (a.x+b.x)/2, y:(a.y+b.y)/2 }; }
+
+  function onDown(e){
+    if (e.pointerType !== 'touch') return;      // souris/pen : on ignore
+    viewport.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+    if (ptrs.size === 2){
+      // on initialise le pinch
+      const [p1, p2] = [...ptrs.values()];
+      pinch = {
+        startDist: dist(p1,p2),
+        baseZoom: zoom
+      };
+      // Évite que le navigateur tente un scroll pendant le pinch
+      e.preventDefault();
+    }
+  }
+
+  function onMove(e){
+    if (!ptrs.has(e.pointerId)) return;
+    if (e.pointerType !== 'touch') return;
+
+    ptrs.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+    // S’il y a deux doigts actifs, on calcule l’échelle et on zoome autour du centre des doigts
+    if (ptrs.size === 2 && pinch){
+      const [p1, p2] = [...ptrs.values()];
+      const d = dist(p1,p2);
+      if (pinch.startDist > 0){
+        const scale = d / pinch.startDist;
+        const newZ = clampZoom(pinch.baseZoom * scale);
+        const c = center(p1,p2);
+        setZoomAroundPoint(newZ, c.x, c.y);
+      }
+      e.preventDefault(); // bloque le scroll pendant le pinch
+    }
+  }
+
+  function onUpOrCancel(e){
+    if (ptrs.has(e.pointerId)){
+      ptrs.delete(e.pointerId);
+    }
+    if (ptrs.size < 2){
+      pinch = null; // fin de geste
+    }
+  }
+
+  // Important : listeners non-passifs pour pouvoir preventDefault() pendant le pinch
+  viewport.addEventListener('pointerdown', onDown, { passive:false });
+  viewport.addEventListener('pointermove', onMove,  { passive:false });
+  viewport.addEventListener('pointerup', onUpOrCancel, { passive:false });
+  viewport.addEventListener('pointercancel', onUpOrCancel, { passive:false });
+})();
+
 
   /* État palette & layout init */
   buildPalette();
@@ -843,6 +907,7 @@ function onPixelRemoved(snap){
   </script>
 </body>
 </html>
+
 
 
 
